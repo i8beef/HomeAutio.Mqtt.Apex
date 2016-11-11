@@ -39,10 +39,9 @@ namespace HomeAutio.Mqtt.Apex
         private IDictionary<string, string> _outletStateMap = new Dictionary<string, string>
         {
             { "ON", "on" },
-            { "MON", "on" },
             { "OFF", "off" },
-            { "MOF", "off" },
-            { "AUTO", "auto" }
+            { "AON", "on" },
+            { "AOF", "off" }
         };
 
         public ApexMqttService(Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
@@ -141,30 +140,21 @@ namespace HomeAutio.Mqtt.Apex
         /// <param name="e"></param>
         private async void RefreshAsync(object sender, ElapsedEventArgs e)
         {
-            try
+            // Make all of the calls to get current status
+            var status = await _client.GetStatus();
+
+            // Compare to current cached status
+            var updates = CompareStatusObjects(_config, status);
+
+            // If updated, publish changes
+            if (updates.Count > 0)
             {
-                // Make all of the calls to get current status
-                var status = await _client.GetStatus();
-
-                // Compare to current cached status
-                var updates = CompareStatusObjects(_config, status);
-
-                // If updated, publish changes
-                if (updates.Count > 0)
+                foreach (var update in updates)
                 {
-                    foreach (var update in updates)
-                    {
-                        _mqttClient.Publish(_topicRoot + update.Key, Encoding.UTF8.GetBytes(update.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
-                    }
-
-                    _config = status;
+                    _mqttClient.Publish(_topicRoot + update.Key, Encoding.UTF8.GetBytes(update.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
                 }
-            }
-            catch (Exception ex)
-            {
-                _log.Error(ex);
-                Timer timer = (Timer)sender;
-                timer.Stop();
+
+                _config = status;
             }
         }
 
