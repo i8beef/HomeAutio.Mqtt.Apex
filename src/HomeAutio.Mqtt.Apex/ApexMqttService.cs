@@ -1,12 +1,11 @@
 ﻿using HomeAutio.Mqtt.Core;
+using HomeAutio.Mqtt.Core.Utilities;
 using I8Beef.Neptune.Apex;
 using I8Beef.Neptune.Apex.Schema;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Timers;
 using uPLibrary.Networking.M2Mqtt.Messages;
 
@@ -23,27 +22,40 @@ namespace HomeAutio.Mqtt.Apex
         private Timer _refresh;
         private int _refreshInterval;
 
-        public ApexMqttService(Client apexClient, string apexName, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
+        /// <summary>
+        /// Holds mapping of possible MQTT topics mapped to outlets they trigger.
+        /// </summary>
+        private IDictionary<string, string> _topicOutletMap;
+
+        private IDictionary<string, FeedCycle> _feedCycleMap = new Dictionary<string, FeedCycle>
+        {
+            { "A", FeedCycle.A },
+            { "B", FeedCycle.B },
+            { "C", FeedCycle.C },
+            { "D", FeedCycle.D },
+            { "CANCEL", FeedCycle.Cancel },
+        };
+
+        private IDictionary<string, string> _outletStateMap = new Dictionary<string, string>
+        {
+            { "ON", "on" },
+            { "MON", "on" },
+            { "OFF", "off" },
+            { "MOF", "off" },
+            { "AUTO", "auto" }
+        };
+
+        public ApexMqttService(Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
             : base(brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
         {
+            _refreshInterval = refreshInterval;
+            _topicOutletMap = new Dictionary<string, string>();
             _subscribedTopics = new List<string>();
-            _subscribedTopics.Add(_topicRoot + "/controls/+/set");
+            _subscribedTopics.Add(_topicRoot + "/outlets/+/set");
+            _subscribedTopics.Add(_topicRoot + "/feedCycle/set");
 
             _client = apexClient;
             _apexName = apexName;
-
-            //_client.EventReceived += Apex_EventReceived;
-
-            //// Apex client logging
-            //_client.MessageSent += (object sender, I8Beef.Apex.Events.MessageSentEventArgs e) => { _log.Debug("Apex Message sent: " + e.Message); };
-            //_client.MessageReceived += (object sender, I8Beef.Apex.Events.MessageReceivedEventArgs e) => { _log.Debug("Apex Message received: " + e.Message); };
-            //_client.Error += (object sender, System.IO.ErrorEventArgs e) => {
-            //    _log.Error(e.GetException());
-
-            //    // Stream parsing is lost at this point, restart the client (need to test this)
-            //    _client.Close();
-            //    _client.Connect();
-            //};
         }
 
         #region Service implementation
@@ -91,8 +103,30 @@ namespace HomeAutio.Mqtt.Apex
             var message = Encoding.UTF8.GetString(e.Message);
             _log.Debug("MQTT message received for topic " + e.Topic + ": " + message);
 
-            if (command != null)
-                _client.SendCommandAsync(command);
+            if (e.Topic == _topicRoot + "/feedCycle/set" && _feedCycleMap.ContainsKey(message.ToUpper()))
+            {
+                var feed = _feedCycleMap[message.ToUpper()];
+                _client.SetFeed(feed);
+            }
+            else if(_topicOutletMap.ContainsKey(e.Topic))
+            {
+                var outlet = _topicOutletMap[e.Topic];
+                OutletState outletState;
+                switch (message.ToLower())
+                {
+                    case "on":
+                        outletState = OutletState.On;
+                        break;
+                    case "off":
+                        outletState = OutletState.Off;
+                        break;
+                    default:
+                        outletState = OutletState.Auto;
+                        break;
+                }
+
+                _client.SetOutlet(outlet, outletState);
+            }
         }
 
         #endregion
@@ -120,7 +154,7 @@ namespace HomeAutio.Mqtt.Apex
                 {
                     foreach (var update in updates)
                     {
-                        EventReceived?.Invoke(this, update);
+                        _mqttClient.Publish(_topicRoot + update.Key, Encoding.UTF8.GetBytes(update.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
                     }
 
                     _config = status;
@@ -128,7 +162,7 @@ namespace HomeAutio.Mqtt.Apex
             }
             catch (Exception ex)
             {
-                Error?.Invoke(this, new ErrorEventArgs(ex));
+                _log.Error(ex);
                 Timer timer = (Timer)sender;
                 timer.Stop();
             }
@@ -140,113 +174,27 @@ namespace HomeAutio.Mqtt.Apex
         /// <param name="status1">First status.</param>
         /// <param name="status2">Second status.</param>
         /// <returns>List of changes.</returns>
-        private IList<Command> CompareStatusObjects(Status status1, Status status2)
+        private IDictionary<string, string> CompareStatusObjects(Status status1, Status status2)
         {
-            var updates = new List<Command>();
+            var updates = new Dictionary<string, string>();
 
-
-            for (var i = 0; i < )
-            foreach (var outlet in status1.Outlets)
+            for (var i = 0; i < status1.Outlets.Length; i++)
             {
-                if (outlet.State != status2.Outlets.FirstOrDefault(x => x.).State)
+                if (status1.Outlets[i].State != status2.Outlets[i].State)
                 {
-                    updates.Add(new PowerCommand { Value = status2.Power ? "ON" : "OFF" });
+                    updates.Add("/outlets/" + status2.Outlets[i].Name.Sluggify(), _outletStateMap[status2.Outlets[i].State.ToUpper()]);
                 }
             }
 
-            // Power: PW
-            if (status1.Power != status2.Power)
-                updates.Add(new PowerCommand { Value = status2.Power ? "ON" : "OFF" });
-
-            // Volume: MV
-            if (status1.Volume != status2.Volume)
-                updates.Add(new VolumeCommand { Value = status2.Volume.ToString() });
-
-            // Mute: MU
-            if (status1.Mute != status2.Mute)
-                updates.Add(new MuteCommand { Value = status2.Mute ? "ON" : "OFF" });
-
-            // Input: SI
-            if (status1.Input != status2.Input)
-                updates.Add(new InputCommand { Value = status2.Input });
-
-            // Surround mode: MS
-            if (status1.SurroundMode != status2.SurroundMode)
-                updates.Add(new SurroundModeCommand { Value = status2.SurroundMode });
-
-            foreach (var zone in status1.SecondaryZoneStatus)
+            for (var i = 0; i < status1.Probes.Length; i++)
             {
-                var zoneNumber = int.Parse(zone.Key.Substring(4));
-
-                // Zone power: Z#
-                if (status1.SecondaryZoneStatus[zone.Key].Power != status2.SecondaryZoneStatus[zone.Key].Power)
-                    updates.Add(new ZonePowerCommand { ZoneId = zoneNumber, Value = status2.SecondaryZoneStatus[zone.Key].Power ? "ON" : "OFF" });
-
-                // Zone input: Z#
-                if (status1.SecondaryZoneStatus[zone.Key].Input != status2.SecondaryZoneStatus[zone.Key].Input)
-                    updates.Add(new ZoneInputCommand { ZoneId = zoneNumber, Value = status2.SecondaryZoneStatus[zone.Key].Input });
-
-                // Zone volume: Z#
-                if (status1.SecondaryZoneStatus[zone.Key].Volume != status2.SecondaryZoneStatus[zone.Key].Volume)
-                    updates.Add(new ZoneVolumeCommand { ZoneId = zoneNumber, Value = status2.SecondaryZoneStatus[zone.Key].Volume.ToString() });
-
-                // Zone input: Z#MU
-                if (status1.SecondaryZoneStatus[zone.Key].Mute != status2.SecondaryZoneStatus[zone.Key].Mute)
-                    updates.Add(new ZoneMuteCommand { ZoneId = zoneNumber, Value = status2.SecondaryZoneStatus[zone.Key].Mute ? "ON" : "OFF" });
+                if (status1.Probes[i].Value != status2.Probes[i].Value)
+                {
+                    updates.Add("/probes/" + status2.Probes[i].Name.Sluggify(), status2.Probes[i].Value);
+                }
             }
 
             return updates;
-        }
-
-        /// <summary>
-        /// Handles publishing updates to the harmony current activity to MQTT.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void Apex_EventReceived(object sender, Command command)
-        {
-            _log.Debug($"Apex event received: {command.GetType()} {command.Code} {command.Value}");
-
-            string commandType = null;
-            switch (command.GetType().Name)
-            {
-                case "PowerCommand":
-                    commandType = "power";
-                    break;
-                case "VolumeCommand":
-                    commandType = "volume";
-                    break;
-                case "MuteCommand":
-                    commandType = "mute";
-                    break;
-                case "InputCommand":
-                    commandType = "input";
-                    break;
-                case "SurroundModeCommand":
-                    commandType = "surroundMode";
-                    break;
-                case "TunerFrequencyCommand":
-                    commandType = "tunerFrequency";
-                    break;
-                case "TunerModeCommand":
-                    commandType = "tunerMode";
-                    break;
-                case "ZonePowerCommand":
-                    commandType = $"zone{((ZonePowerCommand)command).ZoneId}Power";
-                    break;
-                case "ZoneVolumeCommand":
-                    commandType = $"zone{((ZoneVolumeCommand)command).ZoneId}Volume";
-                    break;
-                case "ZoneMuteCommand":
-                    commandType = $"zone{((ZoneMuteCommand)command).ZoneId}Mute";
-                    break;
-                case "ZoneInputCommand":
-                    commandType = $"zone{((ZoneInputCommand)command).ZoneId}Input";
-                    break;
-            }
-
-            if (commandType != null)
-                _mqttClient.Publish(_topicRoot + "/controls/" + commandType, Encoding.UTF8.GetBytes(command.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
         }
 
         /// <summary>
@@ -256,6 +204,28 @@ namespace HomeAutio.Mqtt.Apex
         {
             _config = _client.GetStatus().GetAwaiter().GetResult();
 
+            // Wipe topic to outlet map for reload
+            if (_topicOutletMap.Count > 0)
+                _topicOutletMap.Clear();
+
+            // Map all outlets at {_topicRoot}/outlets/{outletName}/set
+            // Listen at topic {_topicRoot}/outlets/+/set
+            foreach (var outlet in _config.Outlets)
+            {
+                var commandTopic = $"{_topicRoot}/outlets/{outlet.Name.Sluggify()}/set";
+                _topicOutletMap.Add(commandTopic, outlet.Name);
+
+                var currentValue = _outletStateMap[outlet.State.ToUpper()];
+
+                // Publish initial value
+                _mqttClient.Publish($"{_topicRoot}/outlets/{outlet.Name.Sluggify()}", Encoding.UTF8.GetBytes(currentValue), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+            }
+
+            // Initial probe states published at {_topicRoot}/probes/{probeName}
+            foreach (var probe in _config.Probes)
+            {
+                _mqttClient.Publish($"{_topicRoot}/probes/{probe.Name.Sluggify()}", Encoding.UTF8.GetBytes(probe.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+            }
         }
 
         #endregion

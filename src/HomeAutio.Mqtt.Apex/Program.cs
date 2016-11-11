@@ -19,6 +19,9 @@ namespace HomeAutio.Mqtt.Apex
             var apexClient = new Client(apexIp, apexUsername, apexPassword);
 
             var apexName = ConfigurationManager.AppSettings["apexName"];
+            int apexRereshInterval = 30000;
+            if (int.TryParse(ConfigurationManager.AppSettings["apexRefreshInterval"], out apexRereshInterval))
+                apexRereshInterval = apexRereshInterval * 1000;
 
             HostFactory.Run(x =>
             {
@@ -26,7 +29,7 @@ namespace HomeAutio.Mqtt.Apex
 
                 x.Service<ApexMqttService>(s =>
                 {
-                    s.ConstructUsing(name => new ApexMqttService(apexClient, apexName, brokerIp, brokerPort, brokerUsername, brokerPassword));
+                    s.ConstructUsing(name => new ApexMqttService(apexClient, apexName, apexRereshInterval, brokerIp, brokerPort, brokerUsername, brokerPassword));
                     s.WhenStarted(tc => tc.Start());
                     s.WhenStopped(tc => tc.Stop());
                 });
