@@ -40,8 +40,8 @@ namespace HomeAutio.Mqtt.Apex
         {
             { "ON", "on" },
             { "OFF", "off" },
-            { "AON", "on" },
-            { "AOF", "off" }
+            { "AON", "auto" },
+            { "AOF", "auto" }
         };
 
         public ApexMqttService(Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
