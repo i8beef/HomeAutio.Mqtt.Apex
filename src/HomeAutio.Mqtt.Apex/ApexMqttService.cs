@@ -1,19 +1,22 @@
-﻿using HomeAutio.Mqtt.Core;
+﻿using System.Collections.Generic;
+using System.Text;
+using System.Timers;
+using HomeAutio.Mqtt.Core;
 using HomeAutio.Mqtt.Core.Utilities;
 using I8Beef.Neptune.Apex;
 using I8Beef.Neptune.Apex.Schema;
 using NLog;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Timers;
 using uPLibrary.Networking.M2Mqtt.Messages;
 
 namespace HomeAutio.Mqtt.Apex
 {
+    /// <summary>
+    /// Apex MQTT service.
+    /// </summary>
     public class ApexMqttService : ServiceBase
     {
         private ILogger _log = LogManager.GetCurrentClassLogger();
+        private bool _disposed = false;
 
         private Client _client;
         private string _apexName;
@@ -44,14 +47,23 @@ namespace HomeAutio.Mqtt.Apex
             { "AOF", "auto" }
         };
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ApexMqttService"/> class.
+        /// </summary>
+        /// <param name="apexClient">Apex client.</param>
+        /// <param name="apexName">Apex name.</param>
+        /// <param name="refreshInterval">Refresh interval.</param>
+        /// <param name="brokerIp">MQTT broker IP.</param>
+        /// <param name="brokerPort">MQTT broker port.</param>
+        /// <param name="brokerUsername">MQTT broker username.</param>
+        /// <param name="brokerPassword">MQTT broker password.</param>
         public ApexMqttService(Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
             : base(brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
         {
             _refreshInterval = refreshInterval;
             _topicOutletMap = new Dictionary<string, string>();
-            _subscribedTopics = new List<string>();
-            _subscribedTopics.Add(_topicRoot + "/outlets/+/set");
-            _subscribedTopics.Add(_topicRoot + "/feedCycle/set");
+            SubscribedTopics.Add(TopicRoot + "/outlets/+/set");
+            SubscribedTopics.Add(TopicRoot + "/feedCycle/set");
 
             _client = apexClient;
             _apexName = apexName;
@@ -62,7 +74,7 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Service Start action.
         /// </summary>
-        public override void StartService()
+        protected override void StartService()
         {
             GetConfig();
 
@@ -79,13 +91,9 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Service Stop action.
         /// </summary>
-        public override void StopService()
+        protected override void StopService()
         {
-            if (_refresh != null)
-            {
-                _refresh.Stop();
-                _refresh.Dispose();
-            }
+            Dispose();
         }
 
         #endregion
@@ -95,19 +103,19 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Handles commands for the Harmony published to MQTT.
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
+        /// <param name="sender">Event sender.</param>
+        /// <param name="e">Event args.</param>
         protected override void Mqtt_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
         {
             var message = Encoding.UTF8.GetString(e.Message);
             _log.Debug("MQTT message received for topic " + e.Topic + ": " + message);
 
-            if (e.Topic == _topicRoot + "/feedCycle/set" && _feedCycleMap.ContainsKey(message.ToUpper()))
+            if (e.Topic == TopicRoot + "/feedCycle/set" && _feedCycleMap.ContainsKey(message.ToUpper()))
             {
                 var feed = _feedCycleMap[message.ToUpper()];
                 _client.SetFeed(feed);
             }
-            else if(_topicOutletMap.ContainsKey(e.Topic))
+            else if (_topicOutletMap.ContainsKey(e.Topic))
             {
                 var outlet = _topicOutletMap[e.Topic];
                 OutletState outletState;
@@ -133,11 +141,11 @@ namespace HomeAutio.Mqtt.Apex
         #region Apex implementation
 
         /// <summary>
-        /// Heartbeat ping. Failure will result in the heartbeat being stopped, which will 
+        /// Heartbeat ping. Failure will result in the heartbeat being stopped, which will
         /// make any future calls throw an exception as the heartbeat indicator will be disabled.
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
+        /// <param name="sender">Event sender.</param>
+        /// <param name="e">Event args.</param>
         private async void RefreshAsync(object sender, ElapsedEventArgs e)
         {
             // Make all of the calls to get current status
@@ -151,7 +159,7 @@ namespace HomeAutio.Mqtt.Apex
             {
                 foreach (var update in updates)
                 {
-                    _mqttClient.Publish(_topicRoot + update.Key, Encoding.UTF8.GetBytes(update.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+                    MqttClient.Publish(TopicRoot + update.Key, Encoding.UTF8.GetBytes(update.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
                 }
 
                 _config = status;
@@ -198,26 +206,52 @@ namespace HomeAutio.Mqtt.Apex
             if (_topicOutletMap.Count > 0)
                 _topicOutletMap.Clear();
 
-            // Map all outlets at {_topicRoot}/outlets/{outletName}/set
-            // Listen at topic {_topicRoot}/outlets/+/set
+            // Map all outlets at {TopicRoot}/outlets/{outletName}/set
+            // Listen at topic {TopicRoot}/outlets/+/set
             foreach (var outlet in _config.Outlets)
             {
-                var commandTopic = $"{_topicRoot}/outlets/{outlet.Name.Sluggify()}/set";
+                var commandTopic = $"{TopicRoot}/outlets/{outlet.Name.Sluggify()}/set";
                 _topicOutletMap.Add(commandTopic, outlet.Name);
 
                 var currentValue = _outletStateMap[outlet.State.ToUpper()];
 
                 // Publish initial value
-                _mqttClient.Publish($"{_topicRoot}/outlets/{outlet.Name.Sluggify()}", Encoding.UTF8.GetBytes(currentValue), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+                MqttClient.Publish($"{TopicRoot}/outlets/{outlet.Name.Sluggify()}", Encoding.UTF8.GetBytes(currentValue), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
             }
 
-            // Initial probe states published at {_topicRoot}/probes/{probeName}
+            // Initial probe states published at {TopicRoot}/probes/{probeName}
             foreach (var probe in _config.Probes)
             {
-                _mqttClient.Publish($"{_topicRoot}/probes/{probe.Name.Sluggify()}", Encoding.UTF8.GetBytes(probe.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+                MqttClient.Publish($"{TopicRoot}/probes/{probe.Name.Sluggify()}", Encoding.UTF8.GetBytes(probe.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
             }
         }
 
         #endregion
+
+        #region IDisposable Support
+
+        /// <summary>
+        /// Dispose implementation.
+        /// </summary>
+        /// <param name="disposing">Indicates if disposing.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed)
+                return;
+
+            if (disposing)
+            {
+                if (_refresh != null)
+                {
+                    _refresh.Stop();
+                    _refresh.Dispose();
+                }
+            }
+
+            _disposed = true;
+            base.Dispose(disposing);
+        }
+
+        #endregion
     }
-}
+    }
