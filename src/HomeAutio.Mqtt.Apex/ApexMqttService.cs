@@ -1,12 +1,14 @@
 ﻿using System.Collections.Generic;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Timers;
 using HomeAutio.Mqtt.Core;
 using HomeAutio.Mqtt.Core.Utilities;
 using I8Beef.Neptune.Apex;
 using I8Beef.Neptune.Apex.Schema;
-using NLog;
-using uPLibrary.Networking.M2Mqtt.Messages;
+using Microsoft.Extensions.Logging;
+using MQTTnet;
 
 namespace HomeAutio.Mqtt.Apex
 {
@@ -15,14 +17,14 @@ namespace HomeAutio.Mqtt.Apex
     /// </summary>
     public class ApexMqttService : ServiceBase
     {
-        private ILogger _log = LogManager.GetCurrentClassLogger();
+        private ILogger<ApexMqttService> _log;
         private bool _disposed = false;
 
         private Client _client;
         private string _apexName;
         private Status _config;
 
-        private Timer _refresh;
+        private System.Timers.Timer _refresh;
         private int _refreshInterval;
 
         /// <summary>
@@ -50,6 +52,7 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Initializes a new instance of the <see cref="ApexMqttService"/> class.
         /// </summary>
+        /// <param name="logger">Logging instance.</param>
         /// <param name="apexClient">Apex client.</param>
         /// <param name="apexName">Apex name.</param>
         /// <param name="refreshInterval">Refresh interval.</param>
@@ -57,9 +60,10 @@ namespace HomeAutio.Mqtt.Apex
         /// <param name="brokerPort">MQTT broker port.</param>
         /// <param name="brokerUsername">MQTT broker username.</param>
         /// <param name="brokerPassword">MQTT broker password.</param>
-        public ApexMqttService(Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
-            : base(brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
+        public ApexMqttService(ILogger<ApexMqttService> logger, Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
+            : base(logger, brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
         {
+            _log = logger;
             _refreshInterval = refreshInterval;
             _topicOutletMap = new Dictionary<string, string>();
             SubscribedTopics.Add(TopicRoot + "/outlets/+/set");
@@ -71,29 +75,25 @@ namespace HomeAutio.Mqtt.Apex
 
         #region Service implementation
 
-        /// <summary>
-        /// Service Start action.
-        /// </summary>
-        protected override void StartService()
+        /// <inheritdoc />
+        protected override async Task StartServiceAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            GetConfig();
+            await GetConfigAsync(cancellationToken).ConfigureAwait(false);
 
             // Enable refresh
             if (_refresh != null)
                 _refresh.Dispose();
 
-            _refresh = new Timer();
+            _refresh = new System.Timers.Timer(_refreshInterval);
             _refresh.Elapsed += RefreshAsync;
-            _refresh.Interval = _refreshInterval;
             _refresh.Start();
         }
 
-        /// <summary>
-        /// Service Stop action.
-        /// </summary>
-        protected override void StopService()
+        /// <inheritdoc />
+        protected override Task StopServiceAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
             Dispose();
+            return Task.CompletedTask;
         }
 
         #endregion
@@ -105,19 +105,19 @@ namespace HomeAutio.Mqtt.Apex
         /// </summary>
         /// <param name="sender">Event sender.</param>
         /// <param name="e">Event args.</param>
-        protected override void Mqtt_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
+        protected override async void Mqtt_MqttMsgPublishReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
         {
-            var message = Encoding.UTF8.GetString(e.Message);
-            _log.Debug("MQTT message received for topic " + e.Topic + ": " + message);
+            var message = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+            _log.LogDebug("MQTT message received for topic " + e.ApplicationMessage.Topic + ": " + message);
 
-            if (e.Topic == TopicRoot + "/feedCycle/set" && _feedCycleMap.ContainsKey(message.ToUpper()))
+            if (e.ApplicationMessage.Topic == TopicRoot + "/feedCycle/set" && _feedCycleMap.ContainsKey(message.ToUpper()))
             {
                 var feed = _feedCycleMap[message.ToUpper()];
-                _client.SetFeed(feed);
+                await _client.SetFeed(feed).ConfigureAwait(false);
             }
-            else if (_topicOutletMap.ContainsKey(e.Topic))
+            else if (_topicOutletMap.ContainsKey(e.ApplicationMessage.Topic))
             {
-                var outlet = _topicOutletMap[e.Topic];
+                var outlet = _topicOutletMap[e.ApplicationMessage.Topic];
                 OutletState outletState;
                 switch (message.ToLower())
                 {
@@ -132,7 +132,7 @@ namespace HomeAutio.Mqtt.Apex
                         break;
                 }
 
-                _client.SetOutlet(outlet, outletState);
+                await _client.SetOutlet(outlet, outletState).ConfigureAwait(false);
             }
         }
 
@@ -149,7 +149,7 @@ namespace HomeAutio.Mqtt.Apex
         private async void RefreshAsync(object sender, ElapsedEventArgs e)
         {
             // Make all of the calls to get current status
-            var status = await _client.GetStatus();
+            var status = await _client.GetStatus().ConfigureAwait(false);
 
             // Compare to current cached status
             var updates = CompareStatusObjects(_config, status);
@@ -159,7 +159,11 @@ namespace HomeAutio.Mqtt.Apex
             {
                 foreach (var update in updates)
                 {
-                    MqttClient.Publish(TopicRoot + update.Key, Encoding.UTF8.GetBytes(update.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+                    await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                        .WithTopic(TopicRoot + update.Key)
+                        .WithPayload(update.Value)
+                        .WithAtLeastOnceQoS()
+                        .Build()).ConfigureAwait(false);
                 }
 
                 _config = status;
@@ -198,9 +202,11 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Maps Apex device actions to subscription topics.
         /// </summary>
-        private void GetConfig()
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Awaitable <see cref="Task" />.</returns>
+        private async Task GetConfigAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            _config = _client.GetStatus().GetAwaiter().GetResult();
+            _config = await _client.GetStatus(cancellationToken).ConfigureAwait(false);
 
             // Wipe topic to outlet map for reload
             if (_topicOutletMap.Count > 0)
@@ -216,13 +222,21 @@ namespace HomeAutio.Mqtt.Apex
                 var currentValue = _outletStateMap[outlet.State.ToUpper()];
 
                 // Publish initial value
-                MqttClient.Publish($"{TopicRoot}/outlets/{outlet.Name.Sluggify()}", Encoding.UTF8.GetBytes(currentValue), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+                await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                        .WithTopic($"{TopicRoot}/outlets/{outlet.Name.Sluggify()}")
+                        .WithPayload(currentValue)
+                        .WithAtLeastOnceQoS()
+                        .Build()).ConfigureAwait(false);
             }
 
             // Initial probe states published at {TopicRoot}/probes/{probeName}
             foreach (var probe in _config.Probes)
             {
-                MqttClient.Publish($"{TopicRoot}/probes/{probe.Name.Sluggify()}", Encoding.UTF8.GetBytes(probe.Value), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
+                await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                        .WithTopic($"{TopicRoot}/probes/{probe.Name.Sluggify()}")
+                        .WithPayload(probe.Value)
+                        .WithAtLeastOnceQoS()
+                        .Build()).ConfigureAwait(false);
             }
         }
 
@@ -254,4 +268,4 @@ namespace HomeAutio.Mqtt.Apex
 
         #endregion
     }
-    }
+}

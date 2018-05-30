@@ -1,59 +1,58 @@
-﻿using System.Configuration;
+﻿using System;
+using System.Threading.Tasks;
 using I8Beef.Neptune.Apex;
-using NLog;
-using Topshelf;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace HomeAutio.Mqtt.Apex
 {
     /// <summary>
-    /// Main program entrypoint.
+    /// Main program entry point.
     /// </summary>
     public class Program
     {
         /// <summary>
-        /// Main method.
+        /// Main program entry point.
         /// </summary>
-        /// <param name="args">Command line arguments.</param>
-        public static void Main(string[] args)
+        /// <param name="args">Arguments.</param>
+        /// <returns>Awaitable <see cref="Task" />.</returns>
+        public static async Task Main(string[] args)
         {
-            var log = LogManager.GetCurrentClassLogger();
-
-            var brokerIp = ConfigurationManager.AppSettings["brokerIp"];
-            var brokerPort = int.Parse(ConfigurationManager.AppSettings["brokerPort"]);
-            var brokerUsername = ConfigurationManager.AppSettings["brokerUsername"];
-            var brokerPassword = ConfigurationManager.AppSettings["brokerPassword"];
-
-            var apexIp = ConfigurationManager.AppSettings["apexIp"];
-            var apexUsername = ConfigurationManager.AppSettings["apexUsername"];
-            var apexPassword = ConfigurationManager.AppSettings["apexPassword"];
-            var apexClient = new Client(apexIp, apexUsername, apexPassword);
-
-            var apexName = ConfigurationManager.AppSettings["apexName"];
-            if (int.TryParse(ConfigurationManager.AppSettings["apexRefreshInterval"], out int apexRereshInterval))
-                apexRereshInterval = apexRereshInterval * 1000;
-
-            HostFactory.Run(x =>
-            {
-                x.UseNLog();
-                x.OnException(ex => log.Error(ex));
-
-                x.Service<ApexMqttService>(s =>
+            var hostBuilder = new HostBuilder()
+                .ConfigureAppConfiguration((hostContext, config) =>
                 {
-                    s.ConstructUsing(name => new ApexMqttService(apexClient, apexName, apexRereshInterval, brokerIp, brokerPort, brokerUsername, brokerPassword));
-                    s.WhenStarted(tc => tc.Start());
-                    s.WhenStopped(tc => tc.Stop());
+                    config.SetBasePath(Environment.CurrentDirectory);
+                    config.AddJsonFile("appsettings.json", optional: false);
+                })
+                .ConfigureServices((hostContext, services) =>
+                {
+                    services.AddScoped<Client>(serviceProvider =>
+                    {
+                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                        return new Client(
+                            configuration.GetValue<string>("apexHost"),
+                            configuration.GetValue<string>("apexUsername"),
+                            configuration.GetValue<string>("apexPassword"));
+                    });
+
+                    services.AddScoped<IHostedService, ApexMqttService>(serviceProvider =>
+                    {
+                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                        return new ApexMqttService(
+                            serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<ApexMqttService>(),
+                            serviceProvider.GetRequiredService<Client>(),
+                            configuration.GetValue<string>("apexName"),
+                            configuration.GetValue<int>("refreshInterval"),
+                            configuration.GetValue<string>("brokerIp"),
+                            configuration.GetValue<int>("brokerPort"),
+                            configuration.GetValue<string>("brokerUsername"),
+                            configuration.GetValue<string>("brokerPassword"));
+                    });
                 });
 
-                x.EnableServiceRecovery(r =>
-                {
-                    r.RestartService(0);
-                    r.RestartService(0);
-                    r.RestartService(0);
-                });
-
-                x.RunAsLocalSystem();
-                x.UseAssemblyInfoForServiceInfo();
-            });
+            await hostBuilder.RunConsoleAsync();
         }
     }
 }
