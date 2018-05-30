@@ -21,5 +21,5 @@ FROM microsoft/dotnet:2.1-runtime AS runtime
 WORKDIR /app
 COPY --from=publish /app/HomeAutio.Mqtt.Apex/out ./
 
-VOLUME ["/app/app.config", "/app/logs"]
+VOLUME ["/app/appsettings.json", "/app/logs"]
 ENTRYPOINT ["dotnet", "HomeAutio.Mqtt.Apex.dll"]

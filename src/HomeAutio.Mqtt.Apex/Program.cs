@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace HomeAutio.Mqtt.Apex
 {
@@ -20,14 +21,26 @@ namespace HomeAutio.Mqtt.Apex
         /// <returns>Awaitable <see cref="Task" />.</returns>
         public static async Task Main(string[] args)
         {
+            // Setup logging
+            Log.Logger = new LoggerConfiguration()
+              .Enrich.FromLogContext()
+              .WriteTo.Console()
+              .WriteTo.RollingFile(@"logs/HomeAutio.Mqtt.Apex.log")
+              .CreateLogger();
+
             var hostBuilder = new HostBuilder()
                 .ConfigureAppConfiguration((hostContext, config) =>
                 {
                     config.SetBasePath(Environment.CurrentDirectory);
                     config.AddJsonFile("appsettings.json", optional: false);
                 })
+                .ConfigureLogging((hostingContext, logging) =>
+                {
+                    logging.AddSerilog();
+                })
                 .ConfigureServices((hostContext, services) =>
                 {
+                    // Setup client
                     services.AddScoped<Client>(serviceProvider =>
                     {
                         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
@@ -37,11 +50,12 @@ namespace HomeAutio.Mqtt.Apex
                             configuration.GetValue<string>("apexPassword"));
                     });
 
+                    // Setup service instance
                     services.AddScoped<IHostedService, ApexMqttService>(serviceProvider =>
                     {
                         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
                         return new ApexMqttService(
-                            serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<ApexMqttService>(),
+                            serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
                             serviceProvider.GetRequiredService<Client>(),
                             configuration.GetValue<string>("apexName"),
                             configuration.GetValue<int>("refreshInterval"),

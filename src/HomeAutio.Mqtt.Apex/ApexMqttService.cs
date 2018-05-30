@@ -64,7 +64,7 @@ namespace HomeAutio.Mqtt.Apex
             : base(logger, brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
         {
             _log = logger;
-            _refreshInterval = refreshInterval;
+            _refreshInterval = refreshInterval * 1000;
             _topicOutletMap = new Dictionary<string, string>();
             SubscribedTopics.Add(TopicRoot + "/outlets/+/set");
             SubscribedTopics.Add(TopicRoot + "/feedCycle/set");
@@ -92,7 +92,6 @@ namespace HomeAutio.Mqtt.Apex
         /// <inheritdoc />
         protected override Task StopServiceAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            Dispose();
             return Task.CompletedTask;
         }
 
