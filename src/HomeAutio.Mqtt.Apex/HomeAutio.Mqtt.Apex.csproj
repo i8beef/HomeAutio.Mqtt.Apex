@@ -11,6 +11,8 @@
     <Version>1.0.0.0</Version>
     <PackageId>HomeAutio.Mqtt.Apex</PackageId>
     <Authors>Michael Hallock</Authors>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
