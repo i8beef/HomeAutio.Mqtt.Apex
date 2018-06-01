@@ -11,7 +11,7 @@ RUN dotnet restore
 COPY HomeAutio.Mqtt.Apex/. ./HomeAutio.Mqtt.Apex/
 RUN dotnet build -c Release
 
-# copy everything else and build
+# publish
 FROM build AS publish
 WORKDIR /app/HomeAutio.Mqtt.Apex
 RUN dotnet publish -o out
