@@ -162,6 +162,7 @@ namespace HomeAutio.Mqtt.Apex
                         .WithTopic(TopicRoot + update.Key)
                         .WithPayload(update.Value)
                         .WithAtLeastOnceQoS()
+                        .WithRetainFlag()
                         .Build()).ConfigureAwait(false);
                 }
 
@@ -225,6 +226,7 @@ namespace HomeAutio.Mqtt.Apex
                         .WithTopic($"{TopicRoot}/outlets/{outlet.Name.Sluggify()}")
                         .WithPayload(currentValue)
                         .WithAtLeastOnceQoS()
+                        .WithRetainFlag()
                         .Build()).ConfigureAwait(false);
             }
 
@@ -235,6 +237,7 @@ namespace HomeAutio.Mqtt.Apex
                         .WithTopic($"{TopicRoot}/probes/{probe.Name.Sluggify()}")
                         .WithPayload(probe.Value)
                         .WithAtLeastOnceQoS()
+                        .WithRetainFlag()
                         .Build()).ConfigureAwait(false);
             }
         }
