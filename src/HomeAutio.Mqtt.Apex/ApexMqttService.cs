@@ -17,13 +17,13 @@ namespace HomeAutio.Mqtt.Apex
     /// </summary>
     public class ApexMqttService : ServiceBase
     {
-        private ILogger<ApexMqttService> _log;
-        private bool _disposed = false;
+        private readonly ILogger<ApexMqttService> _log;
 
-        private Client _client;
-        private string _apexName;
+        private readonly Client _client;
+        private readonly string _apexName;
         private Status _config;
 
+        private bool _disposed = false;
         private System.Timers.Timer _refresh;
         private int _refreshInterval;
 
