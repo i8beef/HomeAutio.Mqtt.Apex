@@ -55,6 +55,7 @@ namespace HomeAutio.Mqtt.Apex
                     {
                         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
                         return new ApexMqttService(
+                            serviceProvider.GetRequiredService<IApplicationLifetime>(),
                             serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
                             serviceProvider.GetRequiredService<Client>(),
                             configuration.GetValue<string>("apexName"),

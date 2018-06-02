@@ -7,6 +7,7 @@ using HomeAutio.Mqtt.Core;
 using HomeAutio.Mqtt.Core.Utilities;
 using I8Beef.Neptune.Apex;
 using I8Beef.Neptune.Apex.Schema;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 
@@ -52,6 +53,7 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Initializes a new instance of the <see cref="ApexMqttService"/> class.
         /// </summary>
+        /// <param name="applicationLifetime">Application lifetime instance.</param>
         /// <param name="logger">Logging instance.</param>
         /// <param name="apexClient">Apex client.</param>
         /// <param name="apexName">Apex name.</param>
@@ -60,8 +62,8 @@ namespace HomeAutio.Mqtt.Apex
         /// <param name="brokerPort">MQTT broker port.</param>
         /// <param name="brokerUsername">MQTT broker username.</param>
         /// <param name="brokerPassword">MQTT broker password.</param>
-        public ApexMqttService(ILogger<ApexMqttService> logger, Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
-            : base(logger, brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
+        public ApexMqttService(IApplicationLifetime applicationLifetime, ILogger<ApexMqttService> logger, Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
+            : base(applicationLifetime, logger, brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
         {
             _log = logger;
             _refreshInterval = refreshInterval * 1000;
