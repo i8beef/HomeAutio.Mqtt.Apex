@@ -62,7 +62,16 @@ namespace HomeAutio.Mqtt.Apex
         /// <param name="brokerPort">MQTT broker port.</param>
         /// <param name="brokerUsername">MQTT broker username.</param>
         /// <param name="brokerPassword">MQTT broker password.</param>
-        public ApexMqttService(IApplicationLifetime applicationLifetime, ILogger<ApexMqttService> logger, Client apexClient, string apexName, int refreshInterval, string brokerIp, int brokerPort = 1883, string brokerUsername = null, string brokerPassword = null)
+        public ApexMqttService(
+            IApplicationLifetime applicationLifetime,
+            ILogger<ApexMqttService> logger,
+            Client apexClient,
+            string apexName,
+            int refreshInterval,
+            string brokerIp,
+            int brokerPort = 1883,
+            string brokerUsername = null,
+            string brokerPassword = null)
             : base(applicationLifetime, logger, brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
         {
             _log = logger;
@@ -80,7 +89,8 @@ namespace HomeAutio.Mqtt.Apex
         /// <inheritdoc />
         protected override async Task StartServiceAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            await GetConfigAsync(cancellationToken).ConfigureAwait(false);
+            await GetConfigAsync(cancellationToken)
+                .ConfigureAwait(false);
 
             // Enable refresh
             if (_refresh != null)
@@ -114,7 +124,8 @@ namespace HomeAutio.Mqtt.Apex
             if (e.ApplicationMessage.Topic == TopicRoot + "/feedCycle/set" && _feedCycleMap.ContainsKey(message.ToUpper()))
             {
                 var feed = _feedCycleMap[message.ToUpper()];
-                await _client.SetFeed(feed).ConfigureAwait(false);
+                await _client.SetFeed(feed)
+                    .ConfigureAwait(false);
             }
             else if (_topicOutletMap.ContainsKey(e.ApplicationMessage.Topic))
             {
@@ -133,7 +144,8 @@ namespace HomeAutio.Mqtt.Apex
                         break;
                 }
 
-                await _client.SetOutlet(outlet, outletState).ConfigureAwait(false);
+                await _client.SetOutlet(outlet, outletState)
+                    .ConfigureAwait(false);
             }
         }
 
@@ -150,7 +162,8 @@ namespace HomeAutio.Mqtt.Apex
         private async void RefreshAsync(object sender, ElapsedEventArgs e)
         {
             // Make all of the calls to get current status
-            var status = await _client.GetStatus().ConfigureAwait(false);
+            var status = await _client.GetStatus()
+                .ConfigureAwait(false);
 
             // Compare to current cached status
             var updates = CompareStatusObjects(_config, status);
@@ -165,7 +178,8 @@ namespace HomeAutio.Mqtt.Apex
                         .WithPayload(update.Value)
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build()).ConfigureAwait(false);
+                        .Build())
+                        .ConfigureAwait(false);
                 }
 
                 _config = status;
@@ -208,7 +222,8 @@ namespace HomeAutio.Mqtt.Apex
         /// <returns>Awaitable <see cref="Task" />.</returns>
         private async Task GetConfigAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            _config = await _client.GetStatus(cancellationToken).ConfigureAwait(false);
+            _config = await _client.GetStatus(cancellationToken)
+                .ConfigureAwait(false);
 
             // Wipe topic to outlet map for reload
             if (_topicOutletMap.Count > 0)
@@ -229,7 +244,8 @@ namespace HomeAutio.Mqtt.Apex
                         .WithPayload(currentValue)
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build()).ConfigureAwait(false);
+                        .Build())
+                        .ConfigureAwait(false);
             }
 
             // Initial probe states published at {TopicRoot}/probes/{probeName}
@@ -240,7 +256,8 @@ namespace HomeAutio.Mqtt.Apex
                         .WithPayload(probe.Value)
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build()).ConfigureAwait(false);
+                        .Build())
+                        .ConfigureAwait(false);
             }
         }
 
