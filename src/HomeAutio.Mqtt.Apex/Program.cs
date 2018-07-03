@@ -28,46 +28,53 @@ namespace HomeAutio.Mqtt.Apex
               .WriteTo.RollingFile(@"logs/HomeAutio.Mqtt.Apex.log")
               .CreateLogger();
 
-            var hostBuilder = new HostBuilder()
-                .ConfigureAppConfiguration((hostContext, config) =>
-                {
-                    config.SetBasePath(Environment.CurrentDirectory);
-                    config.AddJsonFile("appsettings.json", optional: false);
-                })
-                .ConfigureLogging((hostingContext, logging) =>
-                {
-                    logging.AddSerilog();
-                })
-                .ConfigureServices((hostContext, services) =>
-                {
+            try
+            {
+                var hostBuilder = new HostBuilder()
+                    .ConfigureAppConfiguration((hostContext, config) =>
+                    {
+                        config.SetBasePath(Environment.CurrentDirectory);
+                        config.AddJsonFile("appsettings.json", optional: false);
+                    })
+                    .ConfigureLogging((hostingContext, logging) =>
+                    {
+                        logging.AddSerilog();
+                    })
+                    .ConfigureServices((hostContext, services) =>
+                    {
                     // Setup client
                     services.AddScoped<Client>(serviceProvider =>
-                    {
-                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-                        return new Client(
-                            configuration.GetValue<string>("apexHost"),
-                            configuration.GetValue<string>("apexUsername"),
-                            configuration.GetValue<string>("apexPassword"));
-                    });
+                        {
+                            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                            return new Client(
+                                configuration.GetValue<string>("apexHost"),
+                                configuration.GetValue<string>("apexUsername"),
+                                configuration.GetValue<string>("apexPassword"));
+                        });
 
                     // Setup service instance
                     services.AddScoped<IHostedService, ApexMqttService>(serviceProvider =>
-                    {
-                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-                        return new ApexMqttService(
-                            serviceProvider.GetRequiredService<IApplicationLifetime>(),
-                            serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
-                            serviceProvider.GetRequiredService<Client>(),
-                            configuration.GetValue<string>("apexName"),
-                            configuration.GetValue<int>("refreshInterval"),
-                            configuration.GetValue<string>("brokerIp"),
-                            configuration.GetValue<int>("brokerPort"),
-                            configuration.GetValue<string>("brokerUsername"),
-                            configuration.GetValue<string>("brokerPassword"));
+                        {
+                            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                            return new ApexMqttService(
+                                serviceProvider.GetRequiredService<IApplicationLifetime>(),
+                                serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
+                                serviceProvider.GetRequiredService<Client>(),
+                                configuration.GetValue<string>("apexName"),
+                                configuration.GetValue<int>("refreshInterval"),
+                                configuration.GetValue<string>("brokerIp"),
+                                configuration.GetValue<int>("brokerPort"),
+                                configuration.GetValue<string>("brokerUsername"),
+                                configuration.GetValue<string>("brokerPassword"));
+                        });
                     });
-                });
 
-            await hostBuilder.RunConsoleAsync();
+                await hostBuilder.RunConsoleAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Logger.Fatal(ex, ex.Message);
+            }
         }
     }
 }
