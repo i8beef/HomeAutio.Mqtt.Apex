@@ -18,63 +18,79 @@ namespace HomeAutio.Mqtt.Apex
         /// Main program entry point.
         /// </summary>
         /// <param name="args">Arguments.</param>
-        /// <returns>Awaitable <see cref="Task" />.</returns>
-        public static async Task Main(string[] args)
+        public static void Main(string[] args)
         {
+            MainAsync(args).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Main program entry point.
+        /// </summary>
+        /// <param name="args">Arguments.</param>
+        /// <returns>Awaitable <see cref="Task" />.</returns>
+        public static async Task MainAsync(string[] args)
+        {
+            // Setup config
+            var config = new ConfigurationBuilder()
+                .SetBasePath(Environment.CurrentDirectory)
+                .AddJsonFile("appsettings.json", optional: false)
+                .Build();
+
             // Setup logging
             Log.Logger = new LoggerConfiguration()
-              .Enrich.FromLogContext()
-              .WriteTo.Console()
-              .WriteTo.RollingFile(@"logs/HomeAutio.Mqtt.Apex.log")
-              .CreateLogger();
+                .ReadFrom.Configuration(config)
+                .CreateLogger();
 
             try
             {
-                var hostBuilder = new HostBuilder()
-                    .ConfigureAppConfiguration((hostContext, config) =>
-                    {
-                        config.SetBasePath(Environment.CurrentDirectory);
-                        config.AddJsonFile("appsettings.json", optional: false);
-                    })
-                    .ConfigureLogging((hostingContext, logging) =>
-                    {
-                        logging.AddSerilog();
-                    })
-                    .ConfigureServices((hostContext, services) =>
-                    {
-                    // Setup client
-                    services.AddScoped<Client>(serviceProvider =>
-                        {
-                            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-                            return new Client(
-                                configuration.GetValue<string>("apexHost"),
-                                configuration.GetValue<string>("apexUsername"),
-                                configuration.GetValue<string>("apexPassword"));
-                        });
-
-                    // Setup service instance
-                    services.AddScoped<IHostedService, ApexMqttService>(serviceProvider =>
-                        {
-                            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-                            return new ApexMqttService(
-                                serviceProvider.GetRequiredService<IApplicationLifetime>(),
-                                serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
-                                serviceProvider.GetRequiredService<Client>(),
-                                configuration.GetValue<string>("apexName"),
-                                configuration.GetValue<int>("refreshInterval"),
-                                configuration.GetValue<string>("brokerIp"),
-                                configuration.GetValue<int>("brokerPort"),
-                                configuration.GetValue<string>("brokerUsername"),
-                                configuration.GetValue<string>("brokerPassword"));
-                        });
-                    });
-
+                var hostBuilder = CreateHostBuilder(config);
                 await hostBuilder.RunConsoleAsync();
             }
             catch (Exception ex)
             {
                 Log.Logger.Fatal(ex, ex.Message);
+                throw;
             }
+        }
+
+        /// <summary>
+        /// Creates an <see cref="IHostBuilder"/>.
+        /// </summary>
+        /// <param name="config">External configuration.</param>
+        /// <returns>A configured <see cref="IHostBuilder"/>.</returns>
+        private static IHostBuilder CreateHostBuilder(IConfiguration config)
+        {
+            return new HostBuilder()
+                .ConfigureAppConfiguration((hostContext, configuration) => configuration.AddConfiguration(config))
+                .ConfigureLogging((hostingContext, logging) => logging.AddSerilog())
+                .ConfigureServices((hostContext, services) =>
+                {
+                    // Setup client
+                    services.AddScoped<Client>(serviceProvider =>
+                    {
+                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                        return new Client(
+                            configuration.GetValue<string>("apexHost"),
+                            configuration.GetValue<string>("apexUsername"),
+                            configuration.GetValue<string>("apexPassword"));
+                    });
+
+                    // Setup service instance
+                    services.AddScoped<IHostedService, ApexMqttService>(serviceProvider =>
+                    {
+                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                        return new ApexMqttService(
+                            serviceProvider.GetRequiredService<IApplicationLifetime>(),
+                            serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
+                            serviceProvider.GetRequiredService<Client>(),
+                            configuration.GetValue<string>("apexName"),
+                            configuration.GetValue<int>("refreshInterval"),
+                            configuration.GetValue<string>("brokerIp"),
+                            configuration.GetValue<int>("brokerPort"),
+                            configuration.GetValue<string>("brokerUsername"),
+                            configuration.GetValue<string>("brokerPassword"));
+                    });
+                });
         }
     }
 }
