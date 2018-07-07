@@ -179,7 +179,7 @@ namespace HomeAutio.Mqtt.Apex
                 {
                     await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
                         .WithTopic(TopicRoot + update.Key)
-                        .WithPayload(update.Value)
+                        .WithPayload(update.Value.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
                         .Build())
