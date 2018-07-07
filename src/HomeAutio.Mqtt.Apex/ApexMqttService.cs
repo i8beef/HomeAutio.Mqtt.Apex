@@ -245,7 +245,7 @@ namespace HomeAutio.Mqtt.Apex
                 // Publish initial value
                 await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
                         .WithTopic($"{TopicRoot}/outlets/{outlet.Name.Sluggify()}")
-                        .WithPayload(currentValue)
+                        .WithPayload(currentValue.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
                         .Build())
@@ -257,7 +257,7 @@ namespace HomeAutio.Mqtt.Apex
             {
                 await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
                         .WithTopic($"{TopicRoot}/probes/{probe.Name.Sluggify()}")
-                        .WithPayload(probe.Value)
+                        .WithPayload(probe.Value.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
                         .Build())
