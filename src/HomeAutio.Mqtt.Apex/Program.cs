@@ -83,10 +83,11 @@ namespace HomeAutio.Mqtt.Apex
                             serviceProvider.GetRequiredService<IApplicationLifetime>(),
                             serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
                             serviceProvider.GetRequiredService<Client>(),
-                            configuration.GetValue<string>("apexName"),
-                            configuration.GetValue<int>("refreshInterval"),
+                            configuration.GetValue<string>("apexName", "default"),
+                            configuration.GetValue<int>("refreshInterval", 30),
+                            configuration.GetValue<bool>("publishOnlyChangedValues", false),
                             configuration.GetValue<string>("brokerIp"),
-                            configuration.GetValue<int>("brokerPort"),
+                            configuration.GetValue<int>("brokerPort", 1883),
                             configuration.GetValue<string>("brokerUsername"),
                             configuration.GetValue<string>("brokerPassword"));
                     });

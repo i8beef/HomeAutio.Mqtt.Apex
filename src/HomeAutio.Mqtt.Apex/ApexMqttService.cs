@@ -22,6 +22,7 @@ namespace HomeAutio.Mqtt.Apex
 
         private readonly Client _client;
         private readonly string _apexName;
+        private readonly bool _publishOnlyChangedValues;
         private Status _config;
 
         private bool _disposed = false;
@@ -58,6 +59,7 @@ namespace HomeAutio.Mqtt.Apex
         /// <param name="apexClient">Apex client.</param>
         /// <param name="apexName">Apex name.</param>
         /// <param name="refreshInterval">Refresh interval.</param>
+        /// <param name="publishOnlyChangedValues">Only publish values when they change from previous value.</param>
         /// <param name="brokerIp">MQTT broker IP.</param>
         /// <param name="brokerPort">MQTT broker port.</param>
         /// <param name="brokerUsername">MQTT broker username.</param>
@@ -68,6 +70,7 @@ namespace HomeAutio.Mqtt.Apex
             Client apexClient,
             string apexName,
             int refreshInterval,
+            bool publishOnlyChangedValues,
             string brokerIp,
             int brokerPort = 1883,
             string brokerUsername = null,
@@ -76,6 +79,7 @@ namespace HomeAutio.Mqtt.Apex
         {
             _log = logger;
             _refreshInterval = refreshInterval * 1000;
+            _publishOnlyChangedValues = publishOnlyChangedValues;
             _topicOutletMap = new Dictionary<string, string>();
             SubscribedTopics.Add(TopicRoot + "/outlets/+/set");
             SubscribedTopics.Add(TopicRoot + "/feedCycle/set");
@@ -198,7 +202,7 @@ namespace HomeAutio.Mqtt.Apex
 
             for (var i = 0; i < status1.Outlets.Length; i++)
             {
-                if (status1.Outlets[i].State != status2.Outlets[i].State)
+                if (!_publishOnlyChangedValues || (_publishOnlyChangedValues && status1.Outlets[i].State != status2.Outlets[i].State))
                 {
                     updates.Add("/outlets/" + status2.Outlets[i].Name.Sluggify(), _outletStateMap[status2.Outlets[i].State.ToUpper()]);
                 }
@@ -206,7 +210,7 @@ namespace HomeAutio.Mqtt.Apex
 
             for (var i = 0; i < status1.Probes.Length; i++)
             {
-                if (status1.Probes[i].Value != status2.Probes[i].Value)
+                if (!_publishOnlyChangedValues || (_publishOnlyChangedValues && status1.Probes[i].Value != status2.Probes[i].Value))
                 {
                     updates.Add("/probes/" + status2.Probes[i].Name.Sluggify(), status2.Probes[i].Value);
                 }
