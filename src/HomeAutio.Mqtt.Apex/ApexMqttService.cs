@@ -7,7 +7,6 @@ using HomeAutio.Mqtt.Core;
 using HomeAutio.Mqtt.Core.Utilities;
 using I8Beef.Neptune.Apex;
 using I8Beef.Neptune.Apex.Schema;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 
@@ -54,28 +53,20 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Initializes a new instance of the <see cref="ApexMqttService"/> class.
         /// </summary>
-        /// <param name="applicationLifetime">Application lifetime instance.</param>
         /// <param name="logger">Logging instance.</param>
         /// <param name="apexClient">Apex client.</param>
         /// <param name="apexName">Apex name.</param>
         /// <param name="refreshInterval">Refresh interval.</param>
         /// <param name="publishOnlyChangedValues">Only publish values when they change from previous value.</param>
-        /// <param name="brokerIp">MQTT broker IP.</param>
-        /// <param name="brokerPort">MQTT broker port.</param>
-        /// <param name="brokerUsername">MQTT broker username.</param>
-        /// <param name="brokerPassword">MQTT broker password.</param>
+        /// <param name="brokerSettings">MQTT broker settings.</param>
         public ApexMqttService(
-            IApplicationLifetime applicationLifetime,
             ILogger<ApexMqttService> logger,
             Client apexClient,
             string apexName,
             int refreshInterval,
             bool publishOnlyChangedValues,
-            string brokerIp,
-            int brokerPort = 1883,
-            string brokerUsername = null,
-            string brokerPassword = null)
-            : base(applicationLifetime, logger, brokerIp, brokerPort, brokerUsername, brokerPassword, "apex/" + apexName)
+            BrokerSettings brokerSettings)
+            : base(logger, brokerSettings, "apex/" + apexName)
         {
             _log = logger;
             _refreshInterval = refreshInterval * 1000;
@@ -123,7 +114,7 @@ namespace HomeAutio.Mqtt.Apex
         protected override async void Mqtt_MqttMsgPublishReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
         {
             var message = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
-            _log.LogDebug("MQTT message received for topic " + e.ApplicationMessage.Topic + ": " + message);
+            _log.LogInformation("MQTT message received for topic " + e.ApplicationMessage.Topic + ": " + message);
 
             if (e.ApplicationMessage.Topic == TopicRoot + "/feedCycle/set" && _feedCycleMap.ContainsKey(message.ToUpper()))
             {

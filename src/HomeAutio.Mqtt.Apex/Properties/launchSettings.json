@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HomeAutio.Mqtt.Apex": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

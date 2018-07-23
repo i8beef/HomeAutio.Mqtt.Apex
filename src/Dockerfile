@@ -21,5 +21,7 @@ FROM microsoft/dotnet:2.1-runtime-alpine AS runtime
 WORKDIR /app
 COPY --from=publish /app/HomeAutio.Mqtt.Apex/out ./
 
-VOLUME ["/app/appsettings.json", "/app/logs"]
+ENV ENVIRONMENT Production
+
+VOLUME ["/app/appsettings.Production.json", "/app/logs"]
 ENTRYPOINT ["dotnet", "HomeAutio.Mqtt.Apex.dll"]

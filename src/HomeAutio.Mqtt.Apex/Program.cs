@@ -30,10 +30,15 @@ namespace HomeAutio.Mqtt.Apex
         /// <returns>Awaitable <see cref="Task" />.</returns>
         public static async Task MainAsync(string[] args)
         {
+            var environmentName = Environment.GetEnvironmentVariable("ENVIRONMENT");
+            if (string.IsNullOrEmpty(environmentName))
+                environmentName = "Development";
+
             // Setup config
             var config = new ConfigurationBuilder()
                 .SetBasePath(Environment.CurrentDirectory)
                 .AddJsonFile("appsettings.json", optional: false)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
                 .Build();
 
             // Setup logging
@@ -50,6 +55,10 @@ namespace HomeAutio.Mqtt.Apex
             {
                 Log.Logger.Fatal(ex, ex.Message);
                 throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
             }
         }
 
@@ -68,28 +77,30 @@ namespace HomeAutio.Mqtt.Apex
                     // Setup client
                     services.AddScoped<Client>(serviceProvider =>
                     {
-                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
                         return new Client(
-                            configuration.GetValue<string>("apexHost"),
-                            configuration.GetValue<string>("apexUsername"),
-                            configuration.GetValue<string>("apexPassword"));
+                            config.GetValue<string>("apex:apexHost"),
+                            config.GetValue<string>("apex:apexUsername"),
+                            config.GetValue<string>("apex:apexPassword"));
                     });
 
                     // Setup service instance
                     services.AddScoped<IHostedService, ApexMqttService>(serviceProvider =>
                     {
-                        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+                        var brokerSettings = new Core.BrokerSettings
+                        {
+                            BrokerIp = config.GetValue<string>("mqtt:brokerIp"),
+                            BrokerPort = config.GetValue<int>("mqtt:brokerPort"),
+                            BrokerUsername = config.GetValue<string>("mqtt:brokerUsername"),
+                            BrokerPassword = config.GetValue<string>("mqtt:brokerPassword")
+                        };
+
                         return new ApexMqttService(
-                            serviceProvider.GetRequiredService<IApplicationLifetime>(),
                             serviceProvider.GetRequiredService<ILogger<ApexMqttService>>(),
                             serviceProvider.GetRequiredService<Client>(),
-                            configuration.GetValue<string>("apexName", "default"),
-                            configuration.GetValue<int>("refreshInterval", 30),
-                            configuration.GetValue<bool>("publishOnlyChangedValues", false),
-                            configuration.GetValue<string>("brokerIp"),
-                            configuration.GetValue<int>("brokerPort", 1883),
-                            configuration.GetValue<string>("brokerUsername"),
-                            configuration.GetValue<string>("brokerPassword"));
+                            config.GetValue<string>("apex:apexName", "default"),
+                            config.GetValue<int>("apex:refreshInterval", 30),
+                            config.GetValue<bool>("apex:publishOnlyChangedValues", false),
+                            brokerSettings);
                     });
                 });
         }
