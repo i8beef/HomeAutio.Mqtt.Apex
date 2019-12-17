@@ -9,6 +9,7 @@ using I8Beef.Neptune.Apex;
 using I8Beef.Neptune.Apex.Schema;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
+using MQTTnet.Extensions.ManagedClient;
 
 namespace HomeAutio.Mqtt.Apex
 {
@@ -20,13 +21,13 @@ namespace HomeAutio.Mqtt.Apex
         private readonly ILogger<ApexMqttService> _log;
 
         private readonly Client _client;
-        private readonly string _apexName;
         private readonly bool _publishOnlyChangedValues;
+        private readonly int _refreshInterval;
+
         private Status _config;
 
         private bool _disposed = false;
         private System.Timers.Timer _refresh;
-        private int _refreshInterval;
 
         /// <summary>
         /// Holds mapping of possible MQTT topics mapped to outlets they trigger.
@@ -76,13 +77,12 @@ namespace HomeAutio.Mqtt.Apex
             SubscribedTopics.Add(TopicRoot + "/feedCycle/set");
 
             _client = apexClient;
-            _apexName = apexName;
         }
 
         #region Service implementation
 
         /// <inheritdoc />
-        protected override async Task StartServiceAsync(CancellationToken cancellationToken = default(CancellationToken))
+        protected override async Task StartServiceAsync(CancellationToken cancellationToken = default)
         {
             await GetConfigAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -97,7 +97,7 @@ namespace HomeAutio.Mqtt.Apex
         }
 
         /// <inheritdoc />
-        protected override Task StopServiceAsync(CancellationToken cancellationToken = default(CancellationToken))
+        protected override Task StopServiceAsync(CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
@@ -109,9 +109,8 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Handles commands for the Harmony published to MQTT.
         /// </summary>
-        /// <param name="sender">Event sender.</param>
         /// <param name="e">Event args.</param>
-        protected override async void Mqtt_MqttMsgPublishReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
+        protected override async void Mqtt_MqttMsgPublishReceived(MqttApplicationMessageReceivedEventArgs e)
         {
             var message = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
             _log.LogInformation("MQTT message received for topic " + e.ApplicationMessage.Topic + ": " + message);
@@ -173,8 +172,7 @@ namespace HomeAutio.Mqtt.Apex
                         .WithPayload(update.Value.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build())
-                        .ConfigureAwait(false);
+                        .Build()).ConfigureAwait(false);
                 }
 
                 _config = status;
@@ -201,10 +199,8 @@ namespace HomeAutio.Mqtt.Apex
 
             for (var i = 0; i < status1.Probes.Length; i++)
             {
-                if (!_publishOnlyChangedValues || (_publishOnlyChangedValues && status1.Probes[i].Value != status2.Probes[i].Value))
-                {
-                    updates.Add("/probes/" + status2.Probes[i].Name.Sluggify(), status2.Probes[i].Value);
-                }
+                // Always publish probe values
+                updates.Add("/probes/" + status2.Probes[i].Name.Sluggify(), status2.Probes[i].Value);
             }
 
             return updates;
@@ -215,7 +211,7 @@ namespace HomeAutio.Mqtt.Apex
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Awaitable <see cref="Task" />.</returns>
-        private async Task GetConfigAsync(CancellationToken cancellationToken = default(CancellationToken))
+        private async Task GetConfigAsync(CancellationToken cancellationToken = default)
         {
             _config = await _client.GetStatus(cancellationToken)
                 .ConfigureAwait(false);
@@ -239,8 +235,7 @@ namespace HomeAutio.Mqtt.Apex
                         .WithPayload(currentValue.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build())
-                        .ConfigureAwait(false);
+                        .Build()).ConfigureAwait(false);
             }
 
             // Initial probe states published at {TopicRoot}/probes/{probeName}
@@ -251,8 +246,7 @@ namespace HomeAutio.Mqtt.Apex
                         .WithPayload(probe.Value.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build())
-                        .ConfigureAwait(false);
+                        .Build()).ConfigureAwait(false);
             }
         }
 
