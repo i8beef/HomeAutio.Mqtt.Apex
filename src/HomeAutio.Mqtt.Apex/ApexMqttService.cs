@@ -230,23 +230,27 @@ namespace HomeAutio.Mqtt.Apex
                 var currentValue = _outletStateMap[outlet.State.ToUpper()];
 
                 // Publish initial value
-                await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                await MqttClient.PublishAsync(
+                    new MqttApplicationMessageBuilder()
                         .WithTopic($"{TopicRoot}/outlets/{outlet.Name.Sluggify()}")
                         .WithPayload(currentValue.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build()).ConfigureAwait(false);
+                        .Build(),
+                    cancellationToken).ConfigureAwait(false);
             }
 
             // Initial probe states published at {TopicRoot}/probes/{probeName}
             foreach (var probe in _config.Probes)
             {
-                await MqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                await MqttClient.PublishAsync(
+                    new MqttApplicationMessageBuilder()
                         .WithTopic($"{TopicRoot}/probes/{probe.Name.Sluggify()}")
                         .WithPayload(probe.Value.Trim())
                         .WithAtLeastOnceQoS()
                         .WithRetainFlag()
-                        .Build()).ConfigureAwait(false);
+                        .Build(),
+                    cancellationToken).ConfigureAwait(false);
             }
         }
 
