@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,17 +25,12 @@ namespace HomeAutio.Mqtt.Apex
         private readonly bool _publishOnlyChangedValues;
         private readonly int _refreshInterval;
 
-        private Status _config;
-
-        private bool _disposed = false;
-        private System.Timers.Timer _refresh;
-
         /// <summary>
         /// Holds mapping of possible MQTT topics mapped to outlets they trigger.
         /// </summary>
-        private IDictionary<string, string> _topicOutletMap;
+        private readonly IDictionary<string, string> _topicOutletMap = new Dictionary<string, string>();
 
-        private IDictionary<string, FeedCycle> _feedCycleMap = new Dictionary<string, FeedCycle>
+        private readonly IReadOnlyDictionary<string, FeedCycle> _feedCycleMap = new Dictionary<string, FeedCycle>
         {
             { "A", FeedCycle.A },
             { "B", FeedCycle.B },
@@ -43,13 +39,17 @@ namespace HomeAutio.Mqtt.Apex
             { "CANCEL", FeedCycle.Cancel },
         };
 
-        private IDictionary<string, string> _outletStateMap = new Dictionary<string, string>
+        private readonly IReadOnlyDictionary<string, string> _outletStateMap = new Dictionary<string, string>
         {
             { "ON", "on" },
             { "OFF", "off" },
             { "AON", "auto" },
             { "AOF", "auto" }
         };
+
+        private Status _config;
+        private bool _disposed = false;
+        private System.Timers.Timer _refresh;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ApexMqttService"/> class.
@@ -72,7 +72,6 @@ namespace HomeAutio.Mqtt.Apex
             _log = logger;
             _refreshInterval = refreshInterval * 1000;
             _publishOnlyChangedValues = publishOnlyChangedValues;
-            _topicOutletMap = new Dictionary<string, string>();
             SubscribedTopics.Add(TopicRoot + "/outlets/+/set");
             SubscribedTopics.Add(TopicRoot + "/feedCycle/set");
 

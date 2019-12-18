@@ -20,9 +20,8 @@ namespace HomeAutio.Mqtt.Apex
         /// <summary>
         /// Main program entry point.
         /// </summary>
-        /// <param name="args">Arguments.</param>
         /// <returns>Awaitable <see cref="Task" />.</returns>
-        public static async Task Main(string[] args)
+        public static async Task Main()
         {
             var environmentName = Environment.GetEnvironmentVariable("ENVIRONMENT");
             if (string.IsNullOrEmpty(environmentName))
