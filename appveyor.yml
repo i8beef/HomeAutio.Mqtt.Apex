@@ -20,9 +20,9 @@ build_script:
 
     dotnet publish -c Release src/HomeAutio.Mqtt.Apex.sln
 artifacts:
-- path: src\HomeAutio.Mqtt.Apex\bin\$(configuration)\netcoreapp3.1\publish
+- path: src\HomeAutio.Mqtt.Apex\bin\$(configuration)\net5.0\publish
   name: HomeAutio.Mqtt.Apex-$(appveyor_build_version)
 deploy:
 - provider: GitHub
   auth_token: $(GITHUB_API_KEY)
-  artifact: src\HomeAutio.Mqtt.Apex\bin\$(configuration)\netcoreapp3.1\HomeAutio.Mqtt.Apex-$(appveyor_build_version).zip
+  artifact: src\HomeAutio.Mqtt.Apex\bin\$(configuration)\net5.0\HomeAutio.Mqtt.Apex-$(appveyor_build_version).zip
