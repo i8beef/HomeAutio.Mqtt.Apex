@@ -1,4 +1,5 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/pu5d8gbuix6s02w8/branch/master?svg=true)](https://ci.appveyor.com/project/i8beef/homeautio-mqtt-apex/branch/master)
+![Build](https://github.com/i8beef/HomeAutio.Mqtt.Apex/actions/workflows/build.yml/badge.svg?branch=master)
+![Release](https://github.com/i8beef/HomeAutio.Mqtt.Apex/actions/workflows/release.yml/badge.svg)
 
 # HomeAutio.Mqtt.Apex
 HomeAutio Neptune Apex MQTT Bridge

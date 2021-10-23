@@ -1,4 +1,6 @@
+ARG VERSION=1.0.0.0
 FROM mcr.microsoft.com/dotnet/sdk:5.0-alpine AS build
+ARG VERSION
 WORKDIR /app
 
 # copy csproj and restore as distinct layers
@@ -9,7 +11,7 @@ RUN dotnet restore
 
 # copy and build everything else
 COPY HomeAutio.Mqtt.Apex/. ./HomeAutio.Mqtt.Apex/
-RUN dotnet build -c Release
+RUN dotnet build --configuration Release /p:Version=$VERSION
 
 # publish
 FROM build AS publish
